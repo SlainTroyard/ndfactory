@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(claude --version)",
+      "Bash(claude plugin *)",
+      "Bash(git config *)",
+      "Bash(env)",
+      "Bash(curl -sI --connect-timeout 5 https://github.com)",
+      "Bash(curl -sI --connect-timeout 10 https://github.com)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(host github.com)",
+      "Bash(nslookup github.com)",
+      "Bash(ssh-keyscan github.com)",
+      "Bash(ssh -o ConnectTimeout=5 -T git@github.com)",
+      "Bash(ssh *)",
+      "Bash(npm --version)",
+      "Bash(npm config *)",
+      "Bash(curl -sI --connect-timeout 5 https://registry.npmjs.org)",
+      "Bash(npm info *)",
+      "Bash(curl -sI --connect-timeout 10 https://gitcode.com)",
+      "Bash(curl -sI --connect-timeout 10 https://gitee.com)",
+      "Bash(npm install *)",
+      "Bash(git clone *)",
+      "Bash(npx *)",
+      "Bash(node *)",
+      "Bash(grep -vE '^\\(ui-ux-pro-max|frontend-design\\)$')",
+      "Bash(.claude/skills/brainstorming/scripts/start-server.sh *)",
+      "Bash(git init *)",
+      "Bash(git add *)",
+      "Bash(git commit -m 'docs: add VulnDetect framework design spec *)"
+    ]
+  }
+}
