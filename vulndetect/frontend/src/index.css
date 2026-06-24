@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #0d1117;
+  --foreground: #e6edf3;
+  --card: #161b22;
+  --card-foreground: #e6edf3;
+  --border: #30363d;
+  --primary: #58a6ff;
+  --primary-foreground: #ffffff;
+  --success: #3fb950;
+  --danger: #f85149;
+  --warning: #d2991d;
+  --muted: #8b949e;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  margin: 0;
+}
+
+* { box-sizing: border-box; }
