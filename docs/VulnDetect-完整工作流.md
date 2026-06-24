@@ -7,8 +7,8 @@
 ## 一、整体流程
 
 ```
-环境搭建 → 数据采集 → SFT训练 → 评测对比 → Web演示
-  (5min)    (30s)    (2~10min)  (2min)    (持续)
+环境搭建 → 数据采集 → SFT训练 → DPO偏好对齐 → 评测对比 → Web演示
+  (5min)    (30s)    (2~10min)  (1~3min)     (2min)    (持续)
 ```
 
 ---
@@ -98,7 +98,91 @@ experiments/qwen3b-sft-vulnbench-v1/
 └── logs/                     # TensorBoard 日志
 ```
 
-### 4.4 Web UI 同步
+### 4.4 DPO 偏好对齐（强化学习第一阶段）
+
+DPO 在 SFT 模型基础上，让模型学会区分「好的漏洞分析」和「不好的漏洞分析」。
+
+```bash
+# 1. 生成 DPO 偏好数据（chosen=正确分析, rejected=错误分析）
+python -c "
+import json, os
+with open('data/vulndetect/vulndetect_train.jsonl') as f:
+    sft_data = [json.loads(l) for l in f if l.strip()]
+dpo_data = []
+for item in sft_data[:50]:
+    convs = item['conversations']
+    human = [c for c in convs if c['from'] == 'human'][0]
+    gpt = [c for c in convs if c['from'] == 'gpt'][0]
+    dpo_data.append({
+        'conversations': [human],
+        'chosen': gpt,
+        'rejected': {'from': 'gpt', 'value': 'This code appears safe. No issues found.'},
+    })
+os.makedirs('data/vulndetect', exist_ok=True)
+with open('data/vulndetect/vulndetect_train_dpo.jsonl', 'w') as f:
+    for item in dpo_data:
+        f.write(json.dumps(item, ensure_ascii=False) + '\n')
+print(f'DPO data: {len(dpo_data)} pairs')
+"
+
+# 2. 启动 DPO 训练
+export HF_ENDPOINT=https://hf-mirror.com
+python -m vulndetect.training.dpo \
+  --config vulndetect/config/experiments/exp001_sft.yaml \
+  --sft_checkpoint experiments/qwen3b-sft-vulnbench-v1/checkpoints/final
+```
+
+DPO 训练配置：
+```yaml
+# config/train/dpo.yaml
+training:
+  strategy: dpo
+  dpo:
+    beta: 0.1              # 偏离参考模型的惩罚系数
+    loss_type: sigmoid
+  per_device_train_batch_size: 2
+  gradient_accumulation_steps: 8
+  learning_rate: 5.0e-5    # DPO 学习率比 SFT 低
+  num_epochs: 1
+```
+
+产物：
+```
+experiments/qwen3b-sft-vulnbench-v1/checkpoints/
+├── final/                  # SFT 最终模型
+├── dpo/                    # DPO 中间快照
+└── dpo-final/              # DPO 最终模型（强化学习产物）
+```
+
+### 4.5 PPO 强化学习（第二阶段，需 Reward Model）
+
+PPO 通过奖励模型指导模型自我进化。需要单独的 Reward Model 对输出打分。
+
+```bash
+python -m vulndetect.training.ppo \
+  --config vulndetect/config/experiments/exp001_sft.yaml \
+  --sft_checkpoint experiments/qwen3b-sft-vulnbench-v1/checkpoints/final
+```
+
+> PPO 需要 Reward Model。当前框架已预留接口，实际训练需配置 Reward Model（可用规则打分或训练小模型打分）。
+
+### 4.6 训练流程全景
+
+```
+基座模型 (Qwen-3B)
+    │
+    ├── SFT 微调 (360条漏洞数据, 3轮)    → checkpoint/final
+    │       │
+    │       ├── DPO 偏好对齐 (50对偏好, 1轮) → checkpoint/dpo-final
+    │       │       │
+    │       │       └── PPO 强化学习            → checkpoint/ppo-final
+    │       │
+    │       └── 评测对比 (基座 vs SFT vs DPO)
+    │
+    └── 最终选择最佳 checkpoint 部署到 Playground
+```
+
+### 4.7 Web UI 同步
 
 先创建实验记录：
 ```bash
@@ -131,21 +215,30 @@ lm_eval --model hf \
   --batch_size 4
 ```
 
-### 5.3 评测结果
+### 5.3 评测结果（MMLU Computer Security）
 
-| 模型 | MMLU Computer Security | 说明 |
-|------|----------------------|------|
-| Qwen-3B（基座） | **71.0%** | 未经微调，开箱即用 |
+| 模型 | 分数 | 说明 |
+|------|------|------|
+| Qwen-3B 基座（未微调） | **71.0%** | 开箱即用，未经任何训练 |
 | Qwen-3B + LoRA SFT | **72.0%** | 360 条漏洞数据 QLoRA 微调 3 轮 |
-| 提升幅度 | **+1.0%** | — |
+| Qwen-3B + LoRA SFT + DPO | 待评测 | 在 SFT 基础上做偏好对齐 |
+
+**评测命令对照：**
+```bash
+# 基座模型
+lm_eval --model hf --model_args "pretrained=Qwen/Qwen2.5-3B-Instruct,trust_remote_code=True" --tasks mmlu_computer_security --batch_size 4
+
+# SFT 后
+lm_eval --model hf --model_args "pretrained=Qwen/Qwen2.5-3B-Instruct,peft=experiments/.../checkpoints/final,trust_remote_code=True" --tasks mmlu_computer_security --batch_size 4
+
+# DPO 后
+lm_eval --model hf --model_args "pretrained=Qwen/Qwen2.5-3B-Instruct,peft=experiments/.../checkpoints/dpo-final,trust_remote_code=True" --tasks mmlu_computer_security --batch_size 4
+```
 
 **解读：**
 - 微调后安全知识能力**没有退化**（没有灾难性遗忘）
-- 小幅提升说明 LoRA 在少量数据上有效保留了通用能力同时适配了安全领域
 - 更大的提升需要更聚焦的评测集（如 VulnBench），而非通识类 MMLU 选择题
-- 3B 小模型 + 400 条数据 + 3 轮训练 = 这个结果是合理的
-
-> 结果写入 DB 后 Web UI 的 Evaluation 页面可直观对比基座 vs 微调分数。
+- 3B 小模型 + 400 条数据 = 这个增幅是合理的
 
 ---
 
@@ -221,14 +314,20 @@ export HF_ENDPOINT=https://hf-mirror.com
 # 数据
 python -m vulndetect.data_pipeline.pipeline --output-dir data/vulndetect --days-back 30 --nvd-pages 10
 
-# 训练
+# 训练（SFT）
 python -m vulndetect.training.sft --config config/experiments/exp001_sft.yaml
 
-# 评测（微调后）
-lm_eval --model hf --model_args "pretrained=Qwen/Qwen2.5-3B-Instruct,peft=experiments/qwen3b-sft-vulnbench-v1/checkpoints/final,trust_remote_code=True" --tasks mmlu_computer_security --batch_size 4
+# 训练（DPO）
+python -m vulndetect.training.dpo --config config/experiments/exp001_sft.yaml --sft_checkpoint experiments/qwen3b-sft-vulnbench-v1/checkpoints/final
 
 # 评测（基座基线）
 lm_eval --model hf --model_args "pretrained=Qwen/Qwen2.5-3B-Instruct,trust_remote_code=True" --tasks mmlu_computer_security --batch_size 4
+
+# 评测（SFT后）
+lm_eval --model hf --model_args "pretrained=Qwen/Qwen2.5-3B-Instruct,peft=experiments/qwen3b-sft-vulnbench-v1/checkpoints/final,trust_remote_code=True" --tasks mmlu_computer_security --batch_size 4
+
+# 评测（DPO后）
+lm_eval --model hf --model_args "pretrained=Qwen/Qwen2.5-3B-Instruct,peft=experiments/qwen3b-sft-vulnbench-v1/checkpoints/dpo-final,trust_remote_code=True" --tasks mmlu_computer_security --batch_size 4
 
 # Web UI 后端
 uvicorn vulndetect.backend.main:app --host 0.0.0.0 --port 8000
