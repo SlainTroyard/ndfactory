@@ -1,6 +1,9 @@
 """Data pipeline: collect -> clean -> format -> split -> save"""
+import argparse
 import json
 import logging
+import os
+import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -12,6 +15,7 @@ from vulndetect.data_pipeline.formatters.openrlhf_format import (
 )
 from vulndetect.training.openrlhf_wrapper.datasets import split_dataset
 
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -74,3 +78,65 @@ def run_pipeline(
 
     logger.info("Pipeline complete. Train: %s, Val: %s", train_path, val_path)
     return {"train": train_path, "val": val_path}
+
+
+def collect_from_nvd(results_per_page: int = 50, max_pages: int = 3, days_back: int = 30) -> List[Dict]:
+    """Collect CVEs from NVD and return normalized items."""
+    from vulndetect.data_pipeline.collectors.nvd import fetch_cves, parse_cve
+    logger.info("Fetching NVD CVEs (last %d days)...", days_back)
+    raw = fetch_cves(results_per_page=results_per_page, max_pages=max_pages, days_back=days_back)
+    items = [parse_cve(item) for item in raw]
+    items = [i for i in items if i is not None]
+    logger.info("NVD: %d CVEs collected", len(items))
+    return items
+
+
+def collect_from_github(token: str = None, max_pages: int = 1) -> List[Dict]:
+    """Collect advisories from GitHub and return normalized items."""
+    token = token or os.environ.get("GITHUB_TOKEN", "")
+    if not token:
+        logger.warning("No GitHub token provided, skipping GitHub Advisory collection")
+        return []
+    from vulndetect.data_pipeline.collectors.github_advisory import fetch_advisories, parse_advisory
+    logger.info("Fetching GitHub Advisories...")
+    raw = fetch_advisories(token=token, first=50, max_pages=max_pages)
+    items = [parse_advisory(item) for item in raw]
+    items = [i for i in items if i is not None]
+    logger.info("GitHub: %d advisories collected", len(items))
+    return items
+
+
+def main():
+    parser = argparse.ArgumentParser(description="VulnDetect data pipeline")
+    parser.add_argument("--output-dir", default="data/vulndetect", help="Output directory for processed data")
+    parser.add_argument("--nvd-pages", type=int, default=3, help="NVD API pages to fetch (50 per page)")
+    parser.add_argument("--days-back", type=int, default=30, help="Days back for NVD CVE filter")
+    parser.add_argument("--github-token", default=None, help="GitHub personal access token (or set GITHUB_TOKEN env)")
+    parser.add_argument("--github-pages", type=int, default=1, help="GitHub API pages to fetch")
+    parser.add_argument("--min-severity", default="MEDIUM", help="Minimum severity: LOW/MEDIUM/HIGH/CRITICAL")
+    parser.add_argument("--val-split", type=float, default=0.1, help="Validation split ratio")
+    args = parser.parse_args()
+
+    # Collect
+    all_items = []
+    all_items.extend(collect_from_nvd(results_per_page=50, max_pages=args.nvd_pages, days_back=args.days_back))
+    all_items.extend(collect_from_github(token=args.github_token, max_pages=args.github_pages))
+
+    if not all_items:
+        logger.error("No data collected! Check API connectivity or provide a GitHub token.")
+        sys.exit(1)
+
+    logger.info("Total collected: %d items", len(all_items))
+
+    # Run pipeline
+    run_pipeline(
+        raw_items=all_items,
+        dedup_key="cve_id",
+        min_severity=args.min_severity,
+        val_split=args.val_split,
+        output_dir=args.output_dir,
+    )
+
+
+if __name__ == "__main__":
+    main()

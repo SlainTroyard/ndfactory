@@ -1,7 +1,8 @@
+import pytest
+
 def test_import_all_modules():
     modules = [
         "vulndetect.training.openrlhf_wrapper.datasets",
-        "vulndetect.training.openrlhf_wrapper.models",
         "vulndetect.training.config_loader",
         "vulndetect.training.checkpoint",
         "vulndetect.evaluation.harness",
@@ -10,8 +11,13 @@ def test_import_all_modules():
         "vulndetect.data_pipeline.formatters.openrlhf_format",
         "vulndetect.backend.main",
     ]
+    # models.py needs optional deps (transformers/peft), test separately
     for m in modules:
         __import__(m)
+
+def test_import_models_module():
+    pytest.importorskip("transformers", reason="transformers not installed")
+    __import__("vulndetect.training.openrlhf_wrapper.models")
 
 
 def test_config_roundtrip():

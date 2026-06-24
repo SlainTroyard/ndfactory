@@ -16,6 +16,8 @@ def fetch_cves(
     results_per_page: int = 20,
     api_key: Optional[str] = None,
     max_pages: int = 1,
+    days_back: int = 0,
+    severity: Optional[str] = None,
 ) -> List[Dict]:
     """Fetch CVEs from NVD API with pagination.
 
@@ -24,17 +26,32 @@ def fetch_cves(
         results_per_page: Number of results per page (max 200 with API key, 40 without).
         api_key: NVD API key for higher rate limits.
         max_pages: Maximum number of pages to fetch (1 = single page).
+        days_back: Only fetch CVEs modified in the last N days (0 = no filter).
+        severity: CVSS severity filter (LOW/MEDIUM/HIGH/CRITICAL).
 
     Returns:
         List of raw CVE items from the API.
     """
+    from datetime import datetime, timedelta
+    from urllib.parse import urlencode
+
     all_cves: List[Dict] = []
     current_start = start_index
 
     for page in range(max_pages):
-        url = f"{NVD_BASE_URL}?startIndex={current_start}&resultsPerPage={results_per_page}"
+        # Build query params for this page
+        params = {"startIndex": current_start, "resultsPerPage": results_per_page}
+        if days_back > 0:
+            end = datetime.utcnow()
+            start = end - timedelta(days=days_back)
+            params["pubStartDate"] = start.strftime("%Y-%m-%dT%H:%M:%S.000")
+            params["pubEndDate"] = end.strftime("%Y-%m-%dT%H:%M:%S.000")
+        if severity:
+            params["cvssV3Severity"] = severity.upper()
         if api_key:
-            url += f"&apiKey={api_key}"
+            params["apiKey"] = api_key
+
+        url = NVD_BASE_URL + "?" + urlencode(params)
 
         logger.info("Fetching NVD page %d: startIndex=%d", page + 1, current_start)
         try:

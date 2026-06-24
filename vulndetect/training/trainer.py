@@ -1,13 +1,53 @@
 # vulndetect/training/trainer.py
 """统一 Trainer——封装 SFT/DPO/PPO 训练循环"""
 import os
+import torch
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
-from transformers import TrainingArguments, Trainer, DataCollatorForSeq2Seq
+from transformers import TrainingArguments, Trainer, DataCollatorForSeq2Seq, TrainerCallback
 from peft import get_peft_model, prepare_model_for_kbit_training, PeftModel
 
 from vulndetect.training.checkpoint import find_latest_checkpoint
 from vulndetect.training.openrlhf_wrapper.models import build_qlora_config, load_model_and_tokenizer
+
+
+class MetricsDBCallback(TrainerCallback):
+    """每次 log 时将训练指标写入 SQLite，供 Web UI 实时展示"""
+
+    def __init__(self, experiment_name: str):
+        self.experiment_name = experiment_name
+
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        if not logs:
+            return
+        try:
+            from vulndetect.backend.database import SessionLocal
+            from vulndetect.backend.models.schema import TrainingMetric, Experiment
+
+            db = SessionLocal()
+            exp = db.query(Experiment).filter(Experiment.name == self.experiment_name).first()
+            if not exp:
+                db.close()
+                return
+
+            gpu_mem = 0
+            if torch.cuda.is_available():
+                gpu_mem = torch.cuda.memory_reserved(0) / (1024 * 1024)
+
+            metric = TrainingMetric(
+                experiment_id=exp.id,
+                step=state.global_step,
+                loss=logs.get("loss"),
+                learning_rate=logs.get("learning_rate"),
+                gpu_memory_mb=round(gpu_mem, 1),
+                timestamp=datetime.utcnow(),
+            )
+            db.add(metric)
+            db.commit()
+            db.close()
+        except Exception:
+            pass  # DB 不可用时静默跳过
 
 
 class VulnDetectTrainer:
@@ -17,6 +57,7 @@ class VulnDetectTrainer:
         self.tokenizer = None
         self.trainer = None
         exp_name = config["experiment"]["name"]
+        self.exp_name = exp_name
         self.experiment_dir = Path("experiments") / exp_name
         self.checkpoints_dir = self.experiment_dir / "checkpoints"
         self.logs_dir = self.experiment_dir / "logs"
@@ -35,6 +76,27 @@ class VulnDetectTrainer:
             self.model = PeftModel.from_pretrained(self.model, latest)
             print(f"Resumed from checkpoint: {latest}")
 
+        self._update_db_status("running")
+        print(f"Status updated -> running")
+
+    def _update_db_status(self, status: str):
+        """更新 SQLite 中实验状态，供 Web UI 读取。DB 不可用时静默跳过。"""
+        try:
+            from vulndetect.backend.database import SessionLocal
+            from vulndetect.backend.models.schema import Experiment
+            exp_name = self.config["experiment"]["name"]
+            db = SessionLocal()
+            exp = db.query(Experiment).filter(Experiment.name == exp_name).first()
+            if exp:
+                exp.status = status
+                db.commit()
+                print(f"Experiment '{exp_name}' status -> {status}")
+            else:
+                print(f"Experiment '{exp_name}' not found in DB. Create it via Web UI first.")
+            db.close()
+        except Exception as e:
+            print(f"DB update skipped: {e}")
+
     def train_sft(self, train_dataset, eval_dataset=None):
         train_cfg = self.config.get("training", {})
 
@@ -47,7 +109,7 @@ class VulnDetectTrainer:
             logging_steps=train_cfg.get("logging_steps", 10),
             save_steps=train_cfg.get("save_steps", 200),
             eval_steps=train_cfg.get("eval_steps", 200),
-            evaluation_strategy="steps" if eval_dataset else "no",
+            eval_strategy="steps" if eval_dataset else "no",
             save_total_limit=3,
             fp16=False,
             bf16=True,
@@ -59,14 +121,13 @@ class VulnDetectTrainer:
             remove_unused_columns=False,
         )
 
-        data_collator = DataCollatorForSeq2Seq(tokenizer=self.tokenizer, padding=True)
-
         self.trainer = Trainer(
             model=self.model,
             args=training_args,
             train_dataset=train_dataset,
             eval_dataset=eval_dataset,
-            data_collator=data_collator,
+            data_collator=DataCollatorForSeq2Seq(tokenizer=self.tokenizer, padding=True),
+            callbacks=[MetricsDBCallback(self.exp_name)],
         )
 
         self.trainer.train()
@@ -75,4 +136,6 @@ class VulnDetectTrainer:
         self.model.save_pretrained(final_dir)
         self.tokenizer.save_pretrained(final_dir)
 
+        self._update_db_status("completed")
+        print(f"Status updated -> completed")
         return self.trainer.state

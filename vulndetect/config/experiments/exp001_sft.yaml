@@ -9,7 +9,7 @@ includes:
 
 data:
   dataset:
-    name: "vulnbench"
+    name: "vulndetect"
   preprocessing:
     max_seq_length: 2048
     val_split: 0.1

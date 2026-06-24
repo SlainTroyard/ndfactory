@@ -4,9 +4,16 @@ from pathlib import Path
 from typing import Dict, Any
 from copy import deepcopy
 
+# vulndetect/ 包根目录
+_PACKAGE_ROOT = Path(__file__).resolve().parent.parent
+
 
 def load_config(config_path: str) -> Dict[str, Any]:
-    with open(config_path, "r", encoding="utf-8") as f:
+    path = Path(config_path)
+    if not path.is_absolute():
+        # Resolve relative paths from package root (vulndetect/)
+        path = _PACKAGE_ROOT / path
+    with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -22,7 +29,7 @@ def merge_configs(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, A
 
 def load_experiment_config(experiment_path: str) -> Dict[str, Any]:
     exp_config = load_config(experiment_path)
-    config_dir = Path("config")
+    config_dir = _PACKAGE_ROOT / "config"
 
     includes = exp_config.get("includes", {})
     if "model" in includes:

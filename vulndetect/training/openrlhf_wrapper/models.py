@@ -1,10 +1,11 @@
 """模型加载——QLoRA 配置 + 基座模型加载"""
-from typing import Dict, Tuple, List
-from transformers import BitsAndBytesConfig
-from peft import LoraConfig
+from typing import Dict, Tuple, List, Any
 
 
-def build_qlora_config(config: Dict) -> Tuple[BitsAndBytesConfig, LoraConfig]:
+def build_qlora_config(config: Dict) -> Tuple[Any, Any]:
+    from transformers import BitsAndBytesConfig
+    from peft import LoraConfig
+
     quant_cfg = config.get("quantization", {})
     lora_cfg = config.get("lora", {})
 

@@ -1,33 +1,39 @@
 #!/bin/bash
 # vulndetect/scripts/setup_env.sh
 # VulnDetect 环境初始化——GPU 检测 + venv + 依赖安装
+# 从项目根目录或 vulndetect/ 目录运行均可
 set -e
 
+# 定位脚本所在目录的父目录（即 vulndetect/）
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
 echo "=== VulnDetect Environment Setup ==="
+echo "Project dir: $PROJECT_DIR"
 
 # Check GPU
 if command -v nvidia-smi &> /dev/null; then
     nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
-    echo "CUDA available: $(python3 -c 'import torch; print(torch.cuda.is_available())' 2>/dev/null || echo 'torch not yet installed')"
 else
     echo "WARNING: nvidia-smi not found"
 fi
 
-# Create virtual environment if not exists
-if [ ! -d "venv" ]; then
-    python3 -m venv venv
-    echo "Created virtual environment: venv/"
+# Create virtual environment in project parent if not exists
+VENV_DIR="$PROJECT_DIR/../venv"
+if [ ! -d "$VENV_DIR" ]; then
+    python3 -m venv "$VENV_DIR"
+    echo "Created virtual environment: $VENV_DIR"
 fi
 
-source venv/bin/activate
+source "$VENV_DIR/bin/activate"
 
 # Install PyTorch with CUDA 12.1
 echo "Installing PyTorch..."
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
 # Install remaining dependencies
-echo "Installing dependencies from requirements.txt..."
-pip install -r requirements.txt
+echo "Installing dependencies from $PROJECT_DIR/requirements.txt..."
+pip install -r "$PROJECT_DIR/requirements.txt"
 
 # Verify key packages
 echo ""

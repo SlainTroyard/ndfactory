@@ -1,6 +1,13 @@
 import pytest
 
+try:
+    import transformers  # noqa: F401
+    HAS_TRANSFORMERS = True
+except ImportError:
+    HAS_TRANSFORMERS = False
 
+
+@pytest.mark.skipif(not HAS_TRANSFORMERS, reason="transformers not installed")
 def test_build_qlora_config():
     from vulndetect.training.openrlhf_wrapper.models import build_qlora_config
 
@@ -25,6 +32,7 @@ def test_build_qlora_config():
     assert "q_proj" in lora_config.target_modules
 
 
+@pytest.mark.skipif(not HAS_TRANSFORMERS, reason="transformers not installed")
 def test_build_qlora_config_defaults():
     from vulndetect.training.openrlhf_wrapper.models import build_qlora_config
 
