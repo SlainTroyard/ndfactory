@@ -29,8 +29,11 @@ def update_experiment_status(db: Session, experiment_id: int, status: str) -> Op
     return exp
 
 
-def get_experiment_metrics(db: Session, experiment_id: int, limit: int = 1000) -> List[TrainingMetric]:
-    return db.query(TrainingMetric).filter(TrainingMetric.experiment_id == experiment_id).order_by(TrainingMetric.step.asc()).limit(limit).all()
+def get_experiment_metrics(db: Session, experiment_id: int, limit: int = 2000, stage: str = None) -> List[TrainingMetric]:
+    q = db.query(TrainingMetric).filter(TrainingMetric.experiment_id == experiment_id)
+    if stage:
+        q = q.filter(TrainingMetric.stage == stage)
+    return q.order_by(TrainingMetric.step.asc()).limit(limit).all()
 
 
 def get_experiment_evaluations(db: Session, experiment_id: int) -> List[Evaluation]:

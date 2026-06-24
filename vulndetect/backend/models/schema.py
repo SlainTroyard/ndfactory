@@ -39,6 +39,7 @@ class TrainingMetric(Base):
     loss = Column(Float, nullable=True)
     learning_rate = Column(Float, nullable=True)
     gpu_memory_mb = Column(Float, nullable=True)
+    stage = Column(String(50), default="sft")  # sft | dpo | ppo
     timestamp = Column(DateTime, default=datetime.utcnow)
     experiment = relationship("Experiment", back_populates="metrics")
 

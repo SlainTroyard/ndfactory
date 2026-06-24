@@ -38,7 +38,7 @@ def _log_metric(exp_name: str, step: int, loss: float, lr: float):
         exp = db.query(Experiment).filter(Experiment.name == exp_name).first()
         if exp:
             gpu_mem = torch.cuda.memory_reserved(0) / (1024 * 1024) if torch.cuda.is_available() else 0
-            db.add(TrainingMetric(experiment_id=exp.id, step=step, loss=loss, learning_rate=lr, gpu_memory_mb=round(gpu_mem, 1), timestamp=datetime.utcnow()))
+            db.add(TrainingMetric(experiment_id=exp.id, step=step, loss=loss, learning_rate=lr, gpu_memory_mb=round(gpu_mem, 1), stage="dpo", timestamp=datetime.utcnow()))
             db.commit()
         db.close()
     except Exception:

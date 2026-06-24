@@ -15,8 +15,9 @@ from vulndetect.training.openrlhf_wrapper.models import build_qlora_config, load
 class MetricsDBCallback(TrainerCallback):
     """每次 log 时将训练指标写入 SQLite，供 Web UI 实时展示"""
 
-    def __init__(self, experiment_name: str):
+    def __init__(self, experiment_name: str, stage: str = "sft"):
         self.experiment_name = experiment_name
+        self.stage = stage
 
     def on_log(self, args, state, control, logs=None, **kwargs):
         if not logs:
@@ -41,6 +42,7 @@ class MetricsDBCallback(TrainerCallback):
                 loss=logs.get("loss"),
                 learning_rate=logs.get("learning_rate"),
                 gpu_memory_mb=round(gpu_mem, 1),
+                stage=self.stage,
                 timestamp=datetime.utcnow(),
             )
             db.add(metric)

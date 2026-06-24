@@ -23,8 +23,9 @@ export async function fetchExperiment(id: number): Promise<Experiment> {
   return res.json();
 }
 
-export async function fetchMetrics(id: number): Promise<TrainingMetrics[]> {
-  const res = await fetch(`${BASE_URL}/experiments/${id}/metrics`);
+export async function fetchMetrics(id: number, stage?: string): Promise<TrainingMetrics[]> {
+  const url = stage ? `${BASE_URL}/experiments/${id}/metrics?stage=${stage}` : `${BASE_URL}/experiments/${id}/metrics`;
+  const res = await fetch(url);
   if (!res.ok) throw new Error('Failed to fetch metrics');
   return res.json();
 }

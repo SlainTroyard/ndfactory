@@ -62,9 +62,9 @@ def pause_experiment(experiment_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{experiment_id}/metrics")
-def get_metrics(experiment_id: int, db: Session = Depends(get_db)):
-    metrics = experiment_service.get_experiment_metrics(db, experiment_id)
-    return [{"step": m.step, "loss": m.loss, "learning_rate": m.learning_rate, "gpu_memory_mb": m.gpu_memory_mb, "timestamp": str(m.timestamp)} for m in metrics]
+def get_metrics(experiment_id: int, stage: str = None, db: Session = Depends(get_db)):
+    metrics = experiment_service.get_experiment_metrics(db, experiment_id, stage=stage)
+    return [{"step": m.step, "loss": m.loss, "learning_rate": m.learning_rate, "gpu_memory_mb": m.gpu_memory_mb, "stage": m.stage or "sft", "timestamp": str(m.timestamp)} for m in metrics]
 
 
 @router.get("/{experiment_id}/evaluations")
