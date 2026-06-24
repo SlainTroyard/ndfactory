@@ -1,8 +1,4 @@
-/experiments/
+vulndetect.db
+.venv/
 __pycache__/
 *.pyc
-*.egg-info/
-venv/
-.env
-wandb/
-*.db
