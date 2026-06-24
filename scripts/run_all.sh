@@ -19,19 +19,33 @@ echo "=============================================="
 
 # ---- 清理旧数据 ----
 echo ""
-echo "[0/7] 清理旧数据..."
+echo "[0/7] 清理旧数据 + 重启后端..."
 rm -f vulndetect.db
 rm -rf experiments/
 rm -rf eval_output_baseline eval_output_sft eval_output_dpo
-echo "  已清理"
+# 重启后端以释放 DB 锁
+kill $(lsof -ti:8000) 2>/dev/null || true
+sleep 1
+cd "$PROJECT_DIR" && PYTHONPATH="$PROJECT_DIR" nohup venv/bin/uvicorn vulndetect.backend.main:app --host 0.0.0.0 --port 8000 > /tmp/vulndetect-backend.log 2>&1 &
+sleep 2
+echo "  已清理，后端已重启"
 
-# ---- 创建实验记录 ----
+# ---- 初始化数据库 ----
 echo ""
-echo "[1/7] 创建实验记录..."
-curl -s -X POST http://localhost:8000/api/experiments \
-  -H "Content-Type: application/json" \
-  -d "{\"name\": \"$EXPERIMENT_NAME\", \"description\": \"Qwen-3B QLoRA SFT + DPO\"}" \
-  | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'  Experiment: {d[\"name\"]} (id={d[\"id\"]})')" 2>/dev/null || echo "  (确保后端已启动: uvicorn vulndetect.backend.main:app --port 8000)"
+echo "[1/7] 初始化数据库 + 创建实验记录..."
+python -c "
+from vulndetect.backend.database import init_db, SessionLocal
+from vulndetect.backend.models.schema import Experiment
+
+init_db()
+db = SessionLocal()
+db.query(Experiment).delete()
+exp = Experiment(name='$EXPERIMENT_NAME', description='Qwen-3B QLoRA SFT + DPO', status='created')
+db.add(exp)
+db.commit()
+print(f'  Experiment: {exp.name} (id={exp.id})')
+db.close()
+"
 
 # ---- SFT 训练 ----
 echo ""
