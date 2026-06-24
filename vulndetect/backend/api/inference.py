@@ -112,10 +112,12 @@ def list_checkpoints(experiment_id: Optional[int] = None):
                 ckpt_dir = exp / "checkpoints"
                 if ckpt_dir.exists():
                     for ckpt in sorted(ckpt_dir.iterdir()):
-                        if ckpt.is_dir() and ckpt.name.startswith("checkpoint-"):
+                        # Include any dir with adapter_config.json (valid LoRA checkpoint)
+                        if ckpt.is_dir() and (ckpt / "adapter_config.json").exists():
+                            step = ckpt.name.replace("checkpoint-", "") if ckpt.name.startswith("checkpoint-") else ckpt.name
                             checkpoints.append({
                                 "experiment": exp.name,
-                                "step": ckpt.name.replace("checkpoint-", ""),
+                                "step": step,
                                 "path": str(ckpt),
                             })
     return checkpoints
