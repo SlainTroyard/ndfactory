@@ -11,8 +11,9 @@ _PACKAGE_ROOT = Path(__file__).resolve().parent.parent
 def load_config(config_path: str) -> Dict[str, Any]:
     path = Path(config_path)
     if not path.is_absolute():
-        # Resolve relative paths from package root (vulndetect/)
-        path = _PACKAGE_ROOT / path
+        # Try CWD first, then relative to package root (vulndetect/)
+        if not path.exists():
+            path = _PACKAGE_ROOT / path
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 

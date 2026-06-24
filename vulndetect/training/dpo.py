@@ -57,11 +57,14 @@ def compute_logprobs(model, input_ids, attention_mask, labels):
     """计算 labels 部分的 log probabilities"""
     with torch.no_grad():
         outputs = model(input_ids=input_ids, attention_mask=attention_mask)
-    logits = outputs.logits[:, :-1, :]  # [B, L-1, V]
-    shift_labels = labels[:, 1:]         # [B, L-1]
+    logits = outputs.logits[:, :-1, :]
+    shift_labels = labels[:, 1:]
+    # Clamp out-of-vocab token IDs to safe range
+    vocab_size = logits.size(-1)
+    shift_labels = shift_labels.clamp(0, vocab_size - 1)
     log_probs = F.log_softmax(logits, dim=-1)
     token_logprobs = log_probs.gather(-1, shift_labels.unsqueeze(-1)).squeeze(-1)
-    mask = (shift_labels != -100)
+    mask = (labels[:, 1:] != -100)
     return (token_logprobs * mask).sum(-1) / mask.sum(-1).clamp(min=1)
 
 
@@ -177,9 +180,11 @@ def main():
                 outputs = policy(input_ids=ids, attention_mask=mask)
                 logits = outputs.logits[:, :-1, :]
                 shift_labels = labels[:, 1:]
+                vocab_size = logits.size(-1)
+                shift_labels = shift_labels.clamp(0, vocab_size - 1)
                 lp = F.log_softmax(logits, dim=-1)
                 token_lp = lp.gather(-1, shift_labels.unsqueeze(-1)).squeeze(-1)
-                valid = (shift_labels != -100)
+                valid = (labels[:, 1:] != -100)
                 return (token_lp * valid).sum(-1) / valid.sum(-1).clamp(min=1)
 
             policy_logps_c = policy_logps(c_ids, c_mask, c_labels)
