@@ -137,7 +137,8 @@ for path, label in results.items():
         with open(files[0]) as f:
             data = json.load(f)
         for task, metrics in data.get('results', {}).items():
-            if 'acc' in metrics:
+            score = metrics.get('acc,none') or metrics.get('acc')
+            if score is not None:
                 db.add(Evaluation(experiment_id=exp.id, benchmark_name=label, score=metrics['acc'], details_json={'task': task}))
                 print(f'  {label}: {metrics[\"acc\"]*100:.1f}%')
 
