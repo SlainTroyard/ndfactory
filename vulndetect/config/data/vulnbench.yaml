@@ -1,0 +1,15 @@
+dataset:
+  name: "vulnbench"
+  source: "https://github.com/vulnbench/vulnbench"
+  format: "conversation"
+
+preprocessing:
+  max_seq_length: 2048
+  val_split: 0.1
+  shuffle: true
+  seed: 42
+
+splits:
+  train: "data/train"
+  val: "data/val"
+  test: "data/test"
