@@ -1,6 +1,78 @@
-.superpowers/
-/experiments/
+# ============================================================
+# Python
+# ============================================================
 __pycache__/
-*.pyc
-node_modules/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+*.manifest
+*.spec
+
+# Virtual environments
+venv/
+.venv/
+env/
 .env
+.env.*
+
+# pip
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ============================================================
+# IDE / Editor
+# ============================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ============================================================
+# Node / Frontend
+# ============================================================
+node_modules/
+dist-ssr/
+
+# ============================================================
+# Testing
+# ============================================================
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.coverage
+htmlcov/
+coverage.xml
+.pytest_cache/
+
+# ============================================================
+# Project-specific
+# ============================================================
+
+# Model experiments (root-level checkpoints, runs)
+/experiments/
+
+# Evaluation outputs
+eval_output/
+eval_output_baseline/
+eval_output_dpo/
+eval_output_sft/
+
+# SQLite database
+*.db
+
+# Superpowers framework
+.superpowers/
+
+# Claude local settings (personal, not shared)
+.claude/settings.local.json
+
+# Temporary / scratch files
+chat*.txt
+file.txt

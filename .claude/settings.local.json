@@ -34,7 +34,8 @@
       "Bash(git *)",
       "Skill(code-review)",
       "Bash(xxd /home/xiaofan/ndfactory/vulndetect/__init__.py)",
-      "Bash(python3 *)"
+      "Bash(python3 *)",
+      "Bash(grep -E '\\(chat[12]\\\\.txt|file\\\\.txt|\\\\.db$|eval_output/|eval_output_baseline/|eval_output_dpo/|eval_output_sft/|\\\\.pytest_cache|\\\\.superpowers|experiments/\\)')"
     ]
   }
 }
