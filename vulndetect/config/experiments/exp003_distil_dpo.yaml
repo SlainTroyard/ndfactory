@@ -1,0 +1,28 @@
+# vulndetect/config/experiments/exp003_distil_dpo.yaml
+experiment:
+  name: "qwen3b-distil-dpo-v1"
+  description: "Qwen-3B QLoRA DPO on teacher-distilled code security audit data"
+
+includes:
+  model: "model/qwen3b.yaml"
+  training: "train/dpo.yaml"
+
+data:
+  dataset:
+    name: "distil_code_analysis_dpo"
+  preprocessing:
+    max_seq_length: 4096
+    val_split: 0.1
+    shuffle: true
+    seed: 42
+
+evaluation:
+  benchmarks:
+    - vulnbench
+    - seceval
+    - mmlu_compsec
+    - cybermetric
+    - ctibench
+    - code_vuln_analysis
+  eval_on_checkpoint: true
+  eval_every_n_steps: 200

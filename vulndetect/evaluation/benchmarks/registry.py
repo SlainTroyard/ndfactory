@@ -7,6 +7,7 @@ BENCHMARK_REGISTRY: Dict[str, Dict] = {
     "seceval": {"task": "seceval", "type": "security", "description": "9-domain security eval", "metrics": ["accuracy"]},
     "cybermetric": {"task": "cybermetric_80", "type": "security", "description": "Cyber knowledge MCQs", "metrics": ["accuracy"]},
     "mmlu_compsec": {"task": "mmlu_computer_security", "type": "general", "description": "MMLU computer security subset", "metrics": ["accuracy"]},
+    "code_vuln_analysis": {"task": "code_vuln_analysis", "type": "code_security", "description": "Code vulnerability analysis with LLM-as-Judge", "metrics": ["recall", "precision", "f1", "cwe_accuracy", "fix_correctness", "fpr"]},
 }
 
 def get_task_name(benchmark_name: str) -> str:
