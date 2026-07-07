@@ -64,28 +64,14 @@ def load_reef_samples(reef_dir: str) -> List[Dict]:
 
 def should_filter(sample: Dict) -> Optional[str]:
     """Check if a REEF sample should be filtered out. Returns reason or None."""
-    # Filter: NVD-CWE-noinfo (no real CWE classification)
-    cwes = sample.get("CWEs", [])
-    if "NVD-CWE-noinfo" in cwes:
-        return "NVD-CWE-noinfo"
-
-    # Filter: CVSS too low (negligible severity)
-    try:
-        cvss = float(sample.get("cvss", "0"))
-        if cvss < 4.0:
-            return "CVSS < 4.0 (LOW)"
-    except (ValueError, TypeError):
-        pass
-
-    # Filter: LLM_message too short (likely auto-generated placeholder)
-    llm_msg = sample.get("LLM_message", "")
-    if len(llm_msg) < 200:
-        return "LLM_message < 200 chars"
-
-    # Filter: no patch details
+    # Filter: no patch details (truly unusable)
     details = sample.get("details", [])
     if not details:
         return "no patch details"
+
+    # Filter: patch is empty
+    if all(not d.get("patch", "").strip() for d in details):
+        return "empty patch"
 
     return None
 
@@ -113,16 +99,20 @@ def convert_sample(sample: Dict) -> Dict:
     # Priority: LLM_message > origin_message (commit msg)
     description = sample.get("LLM_message", "") or sample.get("origin_message", "")
 
+    cwes = sample.get("CWEs", [])
+    needs_cwe = "NVD-CWE-noinfo" in cwes
+
     return {
         "cve_id": sample.get("cve_id", ""),
         "description": description,
         "severity": cvss_to_severity(sample.get("cvss", "")),
         "cvss_score": sample.get("cvss", ""),
         "language": sample.get("language", ""),
-        "cwe_ids": [c for c in sample.get("CWEs", []) if c != "NVD-CWE-noinfo"],
-        "primary_cwe": sample.get("CWEs", ["N/A"])[0] if sample.get("CWEs") else "N/A",
-        "code_snippet": details["raw_code"],  # Full file after fix
-        "fix": details["patch"],               # Unified diff
+        "cwe_ids": [c for c in cwes if c != "NVD-CWE-noinfo"],
+        "primary_cwe": next((c for c in cwes if c != "NVD-CWE-noinfo"), "UNKNOWN"),
+        "needs_cwe_classification": needs_cwe,  # Flag for Claude to classify
+        "code_snippet": details["raw_code"],
+        "fix": details["patch"],
         "origin_message": sample.get("origin_message", ""),
         "html_url": sample.get("html_url", ""),
         "_source": "REEF",
@@ -134,8 +124,6 @@ def convert_sample(sample: Dict) -> Dict:
 def import_reef(
     reef_dir: str,
     output_path: str,
-    min_cvss: float = 4.0,
-    min_msg_length: int = 200,
     max_samples: Optional[int] = None,
 ) -> Dict:
     """Import and clean REEF dataset.
@@ -222,14 +210,6 @@ def main():
         help="Output path for cleaned JSONL (default: data/reef/reef_cleaned.jsonl)",
     )
     parser.add_argument(
-        "--min-cvss", type=float, default=4.0,
-        help="Minimum CVSS score to keep (default: 4.0)",
-    )
-    parser.add_argument(
-        "--min-msg-length", type=int, default=200,
-        help="Minimum LLM_message length to keep (default: 200)",
-    )
-    parser.add_argument(
         "--max-samples", type=int, default=None,
         help="Limit output samples (for testing)",
     )
@@ -238,8 +218,6 @@ def main():
     import_reef(
         reef_dir=args.reef_dir,
         output_path=args.output,
-        min_cvss=args.min_cvss,
-        min_msg_length=args.min_msg_length,
         max_samples=args.max_samples,
     )
 
